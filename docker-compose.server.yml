@@ -65,7 +65,6 @@ services:
       # HTTPS Router
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.rule=Host(`${COMPOSE_SERVER_DOMAIN}`)"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.entrypoints=websecure"
-      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.tls=true"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.service=${COMPOSE_PROJECT_NAME}-docling"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.middlewares=docling-auth"
 
