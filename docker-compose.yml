@@ -1,0 +1,36 @@
+networks:
+  frontend:
+    external: true
+  app:
+    driver: bridge
+    internal: false
+
+services:
+  docling:
+    image: ghcr.io/docling-project/docling-serve-cpu
+    ports:
+      - "5001:5001"
+    networks:
+      - frontend
+      - app
+    environment:
+      - DOCLING_SERVE_ENABLE_UI=${ENABLED_UI:-false}
+      - DOCLING_SERVE_ARTIFACTS_PATH=/modelcache
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5001/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - ./data:/modelcache
+    labels:
+      # Note UI is located at http://docling.local.itkdev.dk/ui/
+      - "traefik.enable=true"
+      - "traefik.docker.network=frontend"
+      - "traefik.http.middlewares.docling-auth.basicauth.users=${DOCLING_BASIC_AUTH}"
+      # HTTP UI
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}.rule=Host(`${COMPOSE_DOMAIN}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}.service=${COMPOSE_PROJECT_NAME}"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}.middlewares=docling-auth"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME}.loadbalancer.server.port=5001"

@@ -1,0 +1,76 @@
+networks:
+  frontend:
+    external: true
+  app:
+    driver: bridge
+    internal: false
+
+services:
+  docling-init:
+    image: ghcr.io/docling-project/docling-serve-cpu
+    command:
+      - docling-tools
+      - models
+      - download
+      - '--output-dir=/modelcache'
+      - 'layout'
+      - 'tableformer'
+      - 'code_formula'
+      - 'picture_classifier'
+      #- 'smolvlm' fails with unknown model_type
+      - 'granite_vision'
+      - 'easyocr'
+    volumes:
+      - ./data:/modelcache
+
+  docling:
+    image: ghcr.io/docling-project/docling-serve-cu124
+    restart: unless-stopped
+    expose:
+      - "5001"
+    networks:
+      - frontend
+      - app
+    environment:
+      - DOCLING_SERVE_ENABLE_UI=${ENABLED_UI:-false}
+      - DOCLING_SERVE_ARTIFACTS_PATH=/modelcache
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            count: all # nvidia-smi
+            capabilities: [gpu]
+    depends_on:
+      - docling-init
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5001/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - ./data:/modelcache
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=frontend"
+      - "traefik.http.middlewares.docling-auth.basicauth.users=${DOCLING_BASIC_AUTH}"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+      # HTTP Router (for redirect)
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.rule=Host(`${COMPOSE_DOMAIN}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.entrypoints=web"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.middlewares=redirect-to-https"
+
+      # HTTPS Router
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.rule=Host(`${COMPOSE_DOMAIN}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.entrypoints=websecure"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.tls=true"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.service=${COMPOSE_PROJECT_NAME}-docling"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-https.middlewares=docling-auth"
+
+      # Service
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME}-docling.loadbalancer.server.port=5001"
+
+
+
